@@ -1,0 +1,41 @@
+# --- Build stage ---
+FROM node:20-alpine AS build
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.7.0 --activate
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/backend/package.json ./apps/backend/package.json
+COPY libraries/nestjs-libraries/package.json ./libraries/nestjs-libraries/package.json
+RUN pnpm install --frozen-lockfile
+
+COPY . .
+# Genera Prisma Client (no requiere DB)
+RUN pnpm dlx prisma generate --schema ./libraries/nestjs-libraries/src/database/prisma/schema.prisma
+
+# Compila Nest
+WORKDIR /app/apps/backend
+ENV NODE_ENV=production
+RUN pnpm build
+
+# --- Runtime stage ---
+FROM node:20-alpine AS runtime
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.7.0 --activate
+ENV NODE_ENV=production
+ENV PORT=5001
+EXPOSE 5001
+
+# Copiamos dist y package.json
+COPY --from=build /app/apps/backend/dist ./apps/backend/dist
+COPY --from=build /app/apps/backend/package.json ./apps/backend/package.json
+COPY --from=build /app/package.json /app/pnpm-workspace.yaml ./
+# Prisma client generado en node_modules (de workspace)
+COPY --from=build /app/node_modules ./node_modules
+
+# Solo deps prod para backend (si prefieres)
+# RUN pnpm install --prod --filter ./apps/backend
+
+# Entrypoint: aplicar migraciones (o db push) y arrancar
+# Ajusta si usas migrate deploy en vez de db push
+CMD sh -c "pnpm dlx prisma db push --schema ./libraries/nestjs-libraries/src/database/prisma/schema.prisma || true \
+  && node ./apps/backend/dist/apps/backend/src/main.js"
