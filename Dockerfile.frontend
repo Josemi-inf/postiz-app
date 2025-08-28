@@ -28,24 +28,21 @@ RUN pnpm build
 FROM node:20-alpine AS runtime
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
-# pnpm solo para poder ejecutar "pnpm start" (no vamos a instalar nada aquí)
 RUN corepack enable
 ENV NODE_ENV=production
 ENV PORT=4200
 ENV NEXT_TELEMETRY_DISABLED=1
 EXPOSE 4200
 
-# Copiamos artefactos de build y dependencias YA INSTALADAS
-# 1) app frontend (código necesario y build)
+# Artefactos de build y deps ya instaladas
 COPY --from=build /app/apps/frontend/.next ./apps/frontend/.next
 COPY --from=build /app/apps/frontend/public ./apps/frontend/public
 COPY --from=build /app/apps/frontend/package.json ./apps/frontend/package.json
-COPY --from=build /app/apps/frontend/next.config.* ./apps/frontend/  # si usas .mjs/.js
+# si usas .mjs/.js
+COPY --from=build /app/apps/frontend/next.config.* ./apps/frontend/
 
-# 2) dependencias ya resueltas del monorepo
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml ./
 
 WORKDIR /app/apps/frontend
-# Sin "pnpm install" aquí
 CMD ["pnpm","start","-p","4200"]
