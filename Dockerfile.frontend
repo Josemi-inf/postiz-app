@@ -1,28 +1,24 @@
 # ---------- Build ----------
 FROM node:20-alpine AS build
-RUN apk add --no-cache libc6-compat
-WORKDIR /app
+# toolchain para paquetes nativos (sharp, etc.)
+RUN apk add --no-cache libc6-compat python3 make g++
 
-# Usa la versión de pnpm indicada en package.json (packageManager)
+WORKDIR /app
+# usa la versión de pnpm declarada en package.json (packageManager)
 RUN corepack enable
 
-# Copiamos manifiestos del workspace (usa * por si no tuvieras lock aún)
-COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
-COPY apps/frontend/package.json ./apps/frontend/package.json
-
-# Diagnóstico: comprobar qué llegó al contenedor
-RUN echo "== ls raíz ==" && ls -la && \
-    echo "== cat package.json ==" && cat package.json && \
-    echo "== cat pnpm-workspace.yaml ==" && cat pnpm-workspace.yaml && \
-    echo "== ls apps/frontend ==" && ls -la apps/frontend
-
-# Instala dependencias del workspace (sin frozen por mismatch del lock)
-RUN pnpm -v && node -v && pnpm install --no-frozen-lockfile
-
-# Copiamos el resto del repo
+# Copiamos TODO el repo (más simple y a prueba de workspaces)
 COPY . .
 
-# Build de Next
+# Diagnóstico mínimo (opcional)
+RUN echo "== ls raíz ==" && ls -la && \
+    echo "== pnpm-workspace.yaml ==" && [ -f pnpm-workspace.yaml ] && cat pnpm-workspace.yaml || echo "NO workspace" && \
+    echo "== front package.json ==" && cat apps/frontend/package.json
+
+# Instala dependencias del monorepo sin lock estricto (evita mismatch)
+RUN pnpm install --no-frozen-lockfile
+
+# Compila el frontend
 WORKDIR /app/apps/frontend
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -30,6 +26,7 @@ RUN pnpm build
 
 # ---------- Runtime ----------
 FROM node:20-alpine AS runtime
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 RUN corepack enable
 ENV NODE_ENV=production
@@ -37,13 +34,13 @@ ENV PORT=4200
 ENV NEXT_TELEMETRY_DISABLED=1
 EXPOSE 4200
 
-# Artefactos mínimos
+# Copiamos solo lo necesario para servir Next
 COPY --from=build /app/apps/frontend/.next ./apps/frontend/.next
 COPY --from=build /app/apps/frontend/public ./apps/frontend/public
 COPY --from=build /app/apps/frontend/package.json ./apps/frontend/package.json
 COPY --from=build /app/package.json /app/pnpm-workspace.yaml ./
 
-# Sólo deps de producción del frontend
+# Instalar solo deps prod del frontend
 RUN pnpm install --prod --filter ./apps/frontend
 
 WORKDIR /app/apps/frontend
