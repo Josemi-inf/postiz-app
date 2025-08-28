@@ -1,40 +1,45 @@
-# --- Build stage ---
+# ---------- Build ----------
 FROM node:20-alpine AS build
+RUN apk add --no-cache libc6-compat
+
 WORKDIR /app
+# usa la versión de pnpm del package.json (packageManager)
+RUN corepack enable
 
-# pnpm
-RUN corepack enable && corepack prepare pnpm@9.7.0 --activate
-
-# Copiamos manifiestos para instalar deps con caché
+# 1) Copia archivos base del workspace
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/frontend/package.json ./apps/frontend/package.json
-# si tu frontend usa libs internas, copia también sus package.json
+# si el frontend usa libs internas, copia sus package.json también
 # COPY libraries/tu-lib/package.json ./libraries/tu-lib/package.json
 
-RUN pnpm install --frozen-lockfile
+# 2) Instala sin frozen (para resolver el mismatch del lockfile)
+RUN pnpm install --no-frozen-lockfile
 
-# Copiamos el resto del repo
+# 3) Copia el resto del repo
 COPY . .
 
-# Compila Next (usa next.config.mjs de apps/frontend)
+# 4) Build del frontend
 WORKDIR /app/apps/frontend
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
-# --- Runtime stage ---
+# ---------- Runtime ----------
 FROM node:20-alpine AS runtime
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@9.7.0 --activate
+RUN corepack enable
 ENV NODE_ENV=production
 ENV PORT=4200
+ENV NEXT_TELEMETRY_DISABLED=1
 EXPOSE 4200
 
-# Solo lo necesario para correr
+# Copia artefactos mínimos
 COPY --from=build /app/apps/frontend/.next ./apps/frontend/.next
 COPY --from=build /app/apps/frontend/public ./apps/frontend/public
 COPY --from=build /app/apps/frontend/package.json ./apps/frontend/package.json
 COPY --from=build /app/package.json /app/pnpm-workspace.yaml ./
-# deps en runtime del frontend
+
+# Instala solo deps prod del frontend
 RUN pnpm install --prod --filter ./apps/frontend
 
 WORKDIR /app/apps/frontend
