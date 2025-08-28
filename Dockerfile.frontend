@@ -1,24 +1,28 @@
 # ---------- Build ----------
 FROM node:20-alpine AS build
 RUN apk add --no-cache libc6-compat
-
 WORKDIR /app
-# usa la versión de pnpm del package.json (packageManager)
+
+# Usa la versión de pnpm indicada en package.json (packageManager)
 RUN corepack enable
 
-# 1) Copia archivos base del workspace
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# Copiamos manifiestos del workspace (usa * por si no tuvieras lock aún)
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
 COPY apps/frontend/package.json ./apps/frontend/package.json
-# si el frontend usa libs internas, copia sus package.json también
-# COPY libraries/tu-lib/package.json ./libraries/tu-lib/package.json
 
-# 2) Instala sin frozen (para resolver el mismatch del lockfile)
-RUN pnpm install --no-frozen-lockfile
+# Diagnóstico: comprobar qué llegó al contenedor
+RUN echo "== ls raíz ==" && ls -la && \
+    echo "== cat package.json ==" && cat package.json && \
+    echo "== cat pnpm-workspace.yaml ==" && cat pnpm-workspace.yaml && \
+    echo "== ls apps/frontend ==" && ls -la apps/frontend
 
-# 3) Copia el resto del repo
+# Instala dependencias del workspace (sin frozen por mismatch del lock)
+RUN pnpm -v && node -v && pnpm install --no-frozen-lockfile
+
+# Copiamos el resto del repo
 COPY . .
 
-# 4) Build del frontend
+# Build de Next
 WORKDIR /app/apps/frontend
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -33,13 +37,13 @@ ENV PORT=4200
 ENV NEXT_TELEMETRY_DISABLED=1
 EXPOSE 4200
 
-# Copia artefactos mínimos
+# Artefactos mínimos
 COPY --from=build /app/apps/frontend/.next ./apps/frontend/.next
 COPY --from=build /app/apps/frontend/public ./apps/frontend/public
 COPY --from=build /app/apps/frontend/package.json ./apps/frontend/package.json
 COPY --from=build /app/package.json /app/pnpm-workspace.yaml ./
 
-# Instala solo deps prod del frontend
+# Sólo deps de producción del frontend
 RUN pnpm install --prod --filter ./apps/frontend
 
 WORKDIR /app/apps/frontend
