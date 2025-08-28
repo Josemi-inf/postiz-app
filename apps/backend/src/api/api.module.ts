@@ -65,6 +65,7 @@ const authenticatedController = [
     PublicController,
     McpController,
     MonitorController,
+    HealthController, 
     ...authenticatedController,
   ],
   providers: [
