@@ -1,41 +1,54 @@
-# --- Build stage ---
+# ---------- Build ----------
 FROM node:20-alpine AS build
+# Toolchain por si hay deps nativas (bcrypt, sharp, etc.)
+RUN apk add --no-cache libc6-compat python3 make g++
+
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@9.7.0 --activate
+# Usa la versión de pnpm del package.json (packageManager)
+RUN corepack enable
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/backend/package.json ./apps/backend/package.json
-COPY libraries/nestjs-libraries/package.json ./libraries/nestjs-libraries/package.json
-RUN pnpm install --frozen-lockfile
-
+# Copiamos TODO el repo (más simple para monorepo)
 COPY . .
-# Genera Prisma Client (no requiere DB)
+
+# Diagnóstico mínimo (opcional)
+RUN echo "== ls raíz ==" && ls -la && \
+    echo "== pnpm-workspace.yaml ==" && [ -f pnpm-workspace.yaml ] && cat pnpm-workspace.yaml || echo "NO workspace" && \
+    echo "== backend package.json ==" && cat apps/backend/package.json
+
+# Instala dependencias del workspace (sin lock estricto por posibles mismatch)
+RUN pnpm install --no-frozen-lockfile
+
+# Genera Prisma Client (usa tu ruta real del schema)
 RUN pnpm dlx prisma generate --schema ./libraries/nestjs-libraries/src/database/prisma/schema.prisma
 
-# Compila Nest
+# Compila NestJS del backend
 WORKDIR /app/apps/backend
 ENV NODE_ENV=production
 RUN pnpm build
 
-# --- Runtime stage ---
+# ---------- Runtime ----------
 FROM node:20-alpine AS runtime
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@9.7.0 --activate
+RUN corepack enable
 ENV NODE_ENV=production
 ENV PORT=5001
 EXPOSE 5001
 
-# Copiamos dist y package.json
+# Copiamos artefactos ya compilados y dependencias
+# 1) dist del backend y su package.json
 COPY --from=build /app/apps/backend/dist ./apps/backend/dist
 COPY --from=build /app/apps/backend/package.json ./apps/backend/package.json
-COPY --from=build /app/package.json /app/pnpm-workspace.yaml ./
-# Prisma client generado en node_modules (de workspace)
+
+# 2) node_modules del workspace (ya resueltos en build)
 COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml ./
 
-# Solo deps prod para backend (si prefieres)
-# RUN pnpm install --prod --filter ./apps/backend
+# 3) Prisma schema (necesario para db push / migrate deploy)
+COPY --from=build /app/libraries/nestjs-libraries/src/database/prisma/schema.prisma ./libraries/nestjs-libraries/src/database/prisma/schema.prisma
 
-# Entrypoint: aplicar migraciones (o db push) y arrancar
-# Ajusta si usas migrate deploy en vez de db push
+# Comando de arranque:
+# - Sincroniza el esquema (db push). Si usas migraciones, cambia a "prisma migrate deploy".
+# - Luego lanza el backend (ajusta la ruta al main.js si difiere).
 CMD sh -c "pnpm dlx prisma db push --schema ./libraries/nestjs-libraries/src/database/prisma/schema.prisma || true \
   && node ./apps/backend/dist/apps/backend/src/main.js"
