@@ -15,6 +15,7 @@ const nextConfig = {
 
   images: { remotePatterns: [{ protocol: 'http', hostname: '**' }] },
 
+  // 👇 mantenemos tus redirects existentes
   async redirects() {
     return [
       {
@@ -26,6 +27,13 @@ const nextConfig = {
     ];
   },
 
+  // 👇 añadimos rewrites para hacer de reverse-proxy hacia el backend
+  async rewrites() {
+    return [
+      { source: '/api', destination: 'http://postgres_postiz-backend:5001/api' },
+      { source: '/api/:path*', destination: 'http://postgres_postiz-backend:5001/api/:path*' },
+    ];
+  },
 };
 
 export default withSentryConfig(nextConfig, {
