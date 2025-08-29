@@ -31,7 +31,18 @@ async function bootstrap() {
       ],
     },
   });
+  
+// justo después de crear la app, antes de useGlobalFilters(...)
+app.use((req: any, _res, next) => {
+  if (typeof req.getUser !== 'function') {
+    req.getUser = () => null; // evita que el filtro falle en rutas públicas (/api/auth/*)
+  }
+  next();
+});
 
+app.useGlobalFilters(new SubscriptionExceptionFilter()); // ya no fallará
+
+  
   // 👇 Prefijo global para todos los endpoints
   app.setGlobalPrefix('api');
 
