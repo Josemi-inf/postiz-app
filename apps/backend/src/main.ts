@@ -32,6 +32,9 @@ async function bootstrap() {
     },
   });
 
+  // 👇 Prefijo global para todos los endpoints
+  app.setGlobalPrefix('api');
+
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
