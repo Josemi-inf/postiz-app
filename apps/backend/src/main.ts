@@ -63,6 +63,7 @@ async function bootstrap() {
 
   try {
     await app.listen(port);
+  Logger.log('🟢 Shim activo — getUser por defecto está registrado');
 
     checkConfiguration();
 
