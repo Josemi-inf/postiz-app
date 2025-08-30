@@ -31,19 +31,22 @@ async function bootstrap() {
       ],
     },
   });
-  
-// justo después de crear la app, antes de useGlobalFilters(...)
-app.use((req: any, _res, next) => {
-  if (typeof req.getUser !== 'function') {
-    req.getUser = () => null; // evita que el filtro falle en rutas públicas (/api/auth/*)
-  }
-  next();
-});
 
-app.useGlobalFilters(new SubscriptionExceptionFilter()); // ya no fallará
+  // ✅ Middleware para proteger rutas públicas de errores con getUser
+  app.use((req: any, _res, next) => {
+    if (typeof req.getUser !== 'function') {
+      req.getUser = () => null;
+    }
+    next();
+  });
 
-  
-  // 👇 Prefijo global para todos los endpoints
+  // ✅ Registro único de filtros globales
+  app.useGlobalFilters(
+    new SubscriptionExceptionFilter(),
+    new HttpExceptionFilter()
+  );
+
+  // ✅ Prefijo global
   app.setGlobalPrefix('api');
 
   app.useGlobalPipes(
@@ -53,8 +56,6 @@ app.useGlobalFilters(new SubscriptionExceptionFilter()); // ya no fallará
   );
 
   app.use(cookieParser());
-  app.useGlobalFilters(new SubscriptionExceptionFilter());
-  app.useGlobalFilters(new HttpExceptionFilter());
 
   loadSwagger(app);
 
@@ -63,7 +64,7 @@ app.useGlobalFilters(new SubscriptionExceptionFilter()); // ya no fallará
   try {
     await app.listen(port);
 
-    checkConfiguration(); // Do this last, so that users will see obvious issues at the end of the startup log without having to scroll up.
+    checkConfiguration();
 
     Logger.log(`🚀 Backend is running on: http://localhost:${port}`);
   } catch (e) {
