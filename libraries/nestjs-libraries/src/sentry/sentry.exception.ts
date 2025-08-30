@@ -1,7 +1,7 @@
-import { APP_FILTER } from "@nestjs/core";
-import { SentryGlobalFilter } from "@sentry/nestjs/setup";
+import { APP_FILTER } from '@nestjs/core';
+import { SafeSentryFilter } from './sentry-global.filter';
 
 export const FILTER = {
   provide: APP_FILTER,
-  useClass: SentryGlobalFilter,
+  useClass: SafeSentryFilter,
 };
