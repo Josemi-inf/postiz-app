@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { DatabaseModule } from '@gitroom/nestjs-libraries/database/prisma/database.module';
 import { ApiModule } from '@gitroom/backend/api/api.module';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_FILTER } from '@nestjs/core';
 import { PoliciesGuard } from '@gitroom/backend/services/auth/permissions/permissions.guard';
 import { BullMqModule } from '@gitroom/nestjs-libraries/bull-mq-transport-new/bull.mq.module';
 import { PublicApiModule } from '@gitroom/backend/public-api/public.api.module';
@@ -11,8 +11,11 @@ import { AgentModule } from '@gitroom/nestjs-libraries/agent/agent.module';
 import { McpModule } from '@gitroom/backend/mcp/mcp.module';
 import { ThirdPartyModule } from '@gitroom/nestjs-libraries/3rdparties/thirdparty.module';
 import { VideoModule } from '@gitroom/nestjs-libraries/videos/video.module';
-import { SentryModule } from "@sentry/nestjs/setup";
+import { SentryModule } from '@sentry/nestjs/setup';
 import { FILTER } from '@gitroom/nestjs-libraries/sentry/sentry.exception';
+
+import { SubscriptionExceptionFilter } from '@gitroom/backend/services/auth/permissions/subscription.exception';
+import { HttpExceptionFilter } from '@gitroom/nestjs-libraries/services/exception.filter';
 
 @Global()
 @Module({
@@ -35,7 +38,20 @@ import { FILTER } from '@gitroom/nestjs-libraries/sentry/sentry.exception';
   ],
   controllers: [],
   providers: [
+    // 👇 Registramos ambos filtros como APP_FILTER en orden deseado
+    {
+      provide: APP_FILTER,
+      useClass: SubscriptionExceptionFilter,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: HttpExceptionFilter,
+    },
+
+    // 👇 Mantenemos Sentry al final
     FILTER,
+
+    // Guards
     {
       provide: APP_GUARD,
       useClass: ThrottlerBehindProxyGuard,
@@ -43,7 +59,7 @@ import { FILTER } from '@gitroom/nestjs-libraries/sentry/sentry.exception';
     {
       provide: APP_GUARD,
       useClass: PoliciesGuard,
-    }
+    },
   ],
   exports: [
     BullMqModule,
