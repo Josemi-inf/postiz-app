@@ -10,8 +10,6 @@ import { AppModule } from './app.module';
 import { initializeSentry } from '@gitroom/nestjs-libraries/sentry/initialize.sentry';
 initializeSentry('backend', true);
 
-import { SubscriptionExceptionFilter } from '@gitroom/backend/services/auth/permissions/subscription.exception';
-import { HttpExceptionFilter } from '@gitroom/nestjs-libraries/services/exception.filter';
 import { ConfigurationChecker } from '@gitroom/helpers/configuration/configuration.checker';
 
 async function bootstrap() {
@@ -32,7 +30,7 @@ async function bootstrap() {
     },
   });
 
-  // ✅ Middleware para proteger rutas públicas de errores con getUser
+  // ✅ Middleware para prevenir error en rutas públicas con filtros globales
   app.use((req: any, _res, next) => {
     if (typeof req.getUser !== 'function') {
       req.getUser = () => null;
@@ -40,11 +38,8 @@ async function bootstrap() {
     next();
   });
 
-  // ✅ Registro único de filtros globales
-  app.useGlobalFilters(
-    new SubscriptionExceptionFilter(),
-    new HttpExceptionFilter()
-  );
+  // ❌ Eliminado el registro manual de filtros globales
+  // (ya están registrados por APP_FILTER en app.module.ts)
 
   // ✅ Prefijo global
   app.setGlobalPrefix('api');
@@ -63,7 +58,9 @@ async function bootstrap() {
 
   try {
     await app.listen(port);
-  Logger.log('🟢 Shim activo — getUser por defecto está registrado');
+
+    // 🟢 Confirmación visual en los logs
+    Logger.log('🟢 Shim activo — getUser por defecto está registrado');
 
     checkConfiguration();
 
